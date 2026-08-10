@@ -69,8 +69,9 @@ allow_force_push = true            # CC301: --no-force-push flips this to false
 
 ## Option → CLI flag → environment variable
 
-Every option has a matching CLI flag and `CCHK_*` variable. CLI wins over env, env wins
-over the file.
+Most options have a matching CLI flag and `CCHK_*` variable; `message_pattern` is the
+exception — it has no CLI flag and must come from the file or `CCHK_MESSAGE_PATTERN`.
+CLI wins over env, env wins over the file.
 
 ### `[commit]`
 
@@ -168,6 +169,8 @@ relevant checks to report `skip`.
 
 `ai_attribution = "forbid"` (or `--ai-attribution=forbid`) rejects commits carrying known
 AI-tool signatures (for example AI co-author trailers). The default `"ignore"` allows
-them. Use this to enforce a "no AI-authored commits" policy. To exempt bot/automation
-authors from *all* checks instead, add them to `ignore_authors`, e.g.
+them. Note this only inspects the commit-message text for those signatures: it discourages
+AI attribution, but a commit whose attribution is removed or never added passes, so it
+cannot prove a commit was not AI-authored. To exempt bot/automation authors from *all*
+checks instead, add them to `ignore_authors`, e.g.
 `ignore_authors = ["dependabot[bot]", "renovate[bot]", "copilot[bot]"]`.

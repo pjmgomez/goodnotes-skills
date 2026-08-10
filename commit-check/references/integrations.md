@@ -23,10 +23,18 @@ repos:
     hooks:
       - id: check-message
       - id: check-branch
+        stages: [pre-commit]
       - id: check-author-name
+        stages: [pre-commit]
       - id: check-author-email
+        stages: [pre-commit]
       - id: check-no-force-push
 ```
+
+The `check-branch`, `check-author-name`, and `check-author-email` hooks declare no
+`stages` in the hook manifest, so once the three hook types below are installed they
+would otherwise also run at `commit-msg` and `pre-push`. The explicit `stages` above keep
+them on `pre-commit` only.
 
 Because these hooks span three stages, install all of them:
 
@@ -88,7 +96,7 @@ for the latest v2.
 | `branch` | `true` | Check branch name (Conventional Branch) |
 | `author-name` | `false` | Check committer name |
 | `author-email` | `false` | Check committer email |
-| `dry-run` | `false` | Run without failing (exit `0`) |
+| `dry-run` | `false` | Run the checks without failing the step (exit `0`) |
 | `job-summary` | `true` | Write results to the workflow job summary |
 | `pr-comments` | `false` | Post results as PR comments (needs `pull-requests: write`) |
 | `pr-title` | `false` | Check the PR **title** (great for Squash & Merge) |
@@ -106,12 +114,23 @@ The action exposes a `result` output (structured JSON) for downstream steps:
         with:
           message: true
           branch: true
-      - run: echo '${{ steps.check.outputs.result }}' | jq .status
+          dry-run: true       # still runs the checks, but does not fail the step
+      - env:
+          RESULT: ${{ steps.check.outputs.result }}
+        run: echo "$RESULT" | jq .status
 ```
+
+`dry-run: true` keeps the step green so the consuming step is not skipped by the default
+`success()` condition; fail the job yourself from the parsed result if needed. Pass the
+output through an environment variable rather than interpolating it into the `run`
+script: it contains PR titles and commit messages, which are attacker-controlled and
+could otherwise break out of the shell string.
 
 > Notes: `pr-comments` is skipped for pull requests from forks (see the action's
 > `docs/fork-pr-comments.md`). `pr-title` only applies to `pull_request` /
-> `pull_request_target` events and is ignored on `push`.
+> `pull_request_target` events and is ignored on `push`. `pull_request` does not trigger
+> on title edits by default, so add `types: [opened, synchronize, reopened, edited]` to
+> the trigger when using `pr-title`, otherwise a passing check survives a retitle.
 
 ## Plain CI (any provider)
 
@@ -119,7 +138,7 @@ Without the dedicated Action, install and run the CLI directly. Non-zero exit fa
 job:
 
 ```bash
-pip install commit-check
+pip install commit-check==2.13.4   # pin: defaults and output can change between releases
 
 commit-check --branch --author-name --author-email
 

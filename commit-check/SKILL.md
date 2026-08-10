@@ -55,8 +55,9 @@ message so the `message` (CC001) check passes.
 - **type** — one of the allowed types. Built-in default set: `feat`, `fix`, `docs`,
   `style`, `refactor`, `test`, `chore`, `perf`, `build`, `ci`. A repo may narrow or
   extend this via `allow_commit_types`; check the project's `cchk.toml` first.
-- **description** — short summary. Defaults require **5–80 characters**. Keep it
-  concise. Do not end with a period.
+- **description** — short summary. Keep it concise and do not end with a period. The
+  length checks (default **5–80 characters**) apply to the whole subject line
+  (`<type>(<scope>): <description>`), not just the description.
 - **`!`** or a `BREAKING CHANGE:` footer marks a breaking change.
 - **imperative mood** (CC003) and **capitalized subject** (CC002) are available but
   **off by default** — only satisfy them if the repo's config turns them on. When
@@ -110,7 +111,7 @@ Select **which** checks run with these flags; each maps to a rule family:
 | `--author-name` | `-n` | committer name (CC101) |
 | `--author-email` | `-e` | committer email (CC102) |
 | `--no-force-push` | | reject force push (CC301); reads `pre-push` stdin, else compares against upstream |
-| `--dry-run` | `-d` | run but always exit `0` |
+| `--dry-run` | `-d` | exit `0` immediately without running any check |
 
 Provide the **commit message** by piping to stdin or passing a file path (pre-commit
 passes the `.git/COMMIT_EDITMSG` path positionally). Branch and author checks read from
@@ -135,6 +136,10 @@ unchanged). Prefer this when consuming results programmatically or feeding an LL
 ```bash
 echo "wip bad commit" | commit-check -m --format json
 ```
+
+Abridged payload — the real output also contains the passing entries for the other
+enabled message rules (for example CC004 and CC005), so `checks` is not a failures-only
+list:
 
 ```json
 {
@@ -162,8 +167,9 @@ prints one `[FAIL] <rule_id> <check>: <value>` line per failure (and implies `--
 
 ### Override policy per run
 
-Any `cchk.toml` option has a matching CLI flag (and a `CCHK_*` environment variable),
-useful for one-off checks without editing config:
+Most `cchk.toml` options have a matching CLI flag (and a `CCHK_*` environment variable),
+useful for one-off checks without editing config. The exception is `message_pattern`,
+which has no CLI flag — set it in the file or via `CCHK_MESSAGE_PATTERN`:
 
 ```bash
 commit-check -m --subject-imperative=true --subject-max-length=72
