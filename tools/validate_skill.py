@@ -29,8 +29,11 @@ BOOLEAN_KEYS = {"user-invocable", "disable-model-invocation"}
 NAME_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 FIELD_PATTERN = re.compile(r"^([A-Za-z0-9_-]+):[ \t]*(.*)$")
 LINK_PATTERN = re.compile(r"\]\(([^)]*)\)")
+REFERENCE_PATTERN = re.compile(r"^[ \t]{0,3}\[([^\]]+)\]:[ \t]*(\S+)", re.MULTILINE)
 TAG_PATTERN = re.compile(r"<[A-Za-z/][^>]*>")
 CONTENTS_PATTERN = re.compile(r"^#{1,6}\s+.*contents", re.IGNORECASE | re.MULTILINE)
+# Unquoted scalars YAML reads as null, a boolean or a number rather than as text.
+_NON_STRING_PATTERN = re.compile(r"^(~|null|true|false|yes|no|on|off|-?\d+(\.\d+)?)$", re.IGNORECASE)
 SECRET_SUFFIXES = (".pem", ".key")
 
 
@@ -42,24 +45,31 @@ def _read(path):
         return None, f"missing file: {os.path.basename(path)}"
     except UnicodeDecodeError:
         return None, f"file is not valid UTF-8: {os.path.basename(path)}"
+    except OSError as error:
+        # A malformed skill can make the path a directory or unreadable; report it instead of crashing.
+        return None, f"cannot read {os.path.basename(path)}: {error.strerror or error}"
 
 
-def _unquote(value):
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+def _scalar(value):
+    """Return (text, quoted, problem) for a single-line YAML scalar, keeping its syntax."""
+    if value and value[0] in "\"'":
+        quote = value[0]
+        if len(value) < 2 or value[-1] != quote:
+            return value, True, "value opens with a quote that is never closed"
         inner = value[1:-1]
-        return inner.replace("''", "'") if value[0] == "'" else inner
-    return value
+        return (inner.replace("''", "'") if quote == "'" else inner), True, None
+    return value, False, None
 
 
 def _parse_frontmatter(text):
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
-        return {}, ["SKILL.md does not open with a --- frontmatter fence"]
+        return {}, set(), ["SKILL.md does not open with a --- frontmatter fence"]
     end = next((i for i, line in enumerate(lines[1:], start=1) if line.strip() == "---"), None)
     if end is None:
-        return {}, ["SKILL.md frontmatter is never closed with ---"]
+        return {}, set(), ["SKILL.md frontmatter is never closed with ---"]
 
-    fields, problems = {}, []
+    fields, quoted, problems = {}, set(), []
     for number, line in enumerate(lines[1:end], start=2):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
@@ -71,14 +81,24 @@ def _parse_frontmatter(text):
         key = match.group(1)
         if key in fields:
             problems.append(f"frontmatter line {number} repeats the key: {key}")
-        fields[key] = _unquote(match.group(2).strip())
-    return fields, problems
+        value, is_quoted, problem = _scalar(match.group(2).strip())
+        if problem:
+            problems.append(f"frontmatter line {number} {problem}: {line.strip()}")
+        fields[key] = value
+        if is_quoted:
+            quoted.add(key)
+        else:
+            quoted.discard(key)
+    return fields, quoted, problems
 
 
-def _check_frontmatter(skill_name, fields):
+def _check_frontmatter(skill_name, fields, quoted):
     problems = []
     name = fields.get("name")
-    if not name:
+    if name and "name" not in quoted and _NON_STRING_PATTERN.match(name):
+        # YAML reads these unquoted scalars as null/boolean/number, not as the text they look like.
+        problems.append(f'name "{name}" is not a string — quote it')
+    elif not name:
         problems.append("frontmatter is missing name")
     else:
         if name != skill_name:
@@ -89,7 +109,9 @@ def _check_frontmatter(skill_name, fields):
             problems.append(f'name "{name}" must be 1-64 chars of lowercase letters, digits and single hyphens')
 
     description = fields.get("description")
-    if not description:
+    if description and "description" not in quoted and _NON_STRING_PATTERN.match(description):
+        problems.append(f'description "{description}" is not a string — quote it')
+    elif not description:
         problems.append("frontmatter is missing a non-empty description — an agent has nothing to match on")
     elif len(description) > MAX_DESCRIPTION_CHARS:
         problems.append(f"description is {len(description)} chars, the limit is {MAX_DESCRIPTION_CHARS}")
@@ -103,20 +125,31 @@ def _check_frontmatter(skill_name, fields):
     for key in sorted(set(fields) - ALLOWED_KEYS):
         problems.append(f"unknown frontmatter key: {key}")
     for key in sorted(BOOLEAN_KEYS & set(fields)):
-        if fields[key] not in ("true", "false"):
-            problems.append(f'{key} must be true or false, got "{fields[key]}"')
+        if fields[key] not in ("true", "false") or key in quoted:
+            # A quoted "true" is the string, not the boolean the schema expects.
+            problems.append(f'{key} must be an unquoted true or false, got "{fields[key]}"')
     return problems
+
+
+def _link_targets(text):
+    for raw in LINK_PATTERN.findall(text):
+        parts = raw.split()
+        yield parts[0] if parts else ""
+    # Reference-style definitions ("[id]: ./references/x.md") are links too, and just as breakable.
+    for _label, target in REFERENCE_PATTERN.findall(text):
+        yield target.strip("<>")
 
 
 def _check_links(skill_dir, path, text):
     problems = []
     where = os.path.relpath(path, skill_dir)
-    for raw in LINK_PATTERN.findall(text):
-        target = raw.split()[0] if raw.split() else ""
+    root = os.path.realpath(skill_dir)
+    for target in _link_targets(text):
         if not target or target.startswith(("http://", "https://", "mailto:", "#")):
             continue
         resolved = os.path.normpath(os.path.join(os.path.dirname(path), target.split("#")[0]))
-        if os.path.relpath(resolved, skill_dir).startswith(".."):
+        # Compare the real paths: a symlink inside the skill can still point outside it.
+        if os.path.relpath(os.path.realpath(resolved), root).startswith(".."):
             problems.append(f"{where} links outside the skill folder ({target}) — skills must be self-contained")
         elif not os.path.exists(resolved):
             problems.append(f"{where} links to a missing file: {target}")
@@ -139,8 +172,8 @@ def validate(path):
     if text is None:
         return [problem], stats
 
-    fields, problems = _parse_frontmatter(text)
-    problems += _check_frontmatter(os.path.basename(skill_dir), fields)
+    fields, quoted, problems = _parse_frontmatter(text)
+    problems += _check_frontmatter(os.path.basename(skill_dir), fields, quoted)
 
     stats["skill_md_lines"] = len(text.splitlines())
     if stats["skill_md_lines"] > MAX_SKILL_LINES:

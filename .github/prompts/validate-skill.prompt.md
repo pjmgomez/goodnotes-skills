@@ -7,8 +7,9 @@ argument-hint: 'the skill name'
 # Validate a skill
 
 Validate the skill named in the prompt argument (default: every folder under `skills/`).
-This repository has no CI, so this is the gate. The checklist itself lives in
-[CONTRIBUTING.md](../../CONTRIBUTING.md).
+CI runs the mechanical validator on every pull request touching `skills/` or `tools/`, so this
+is the pre-PR gate: run that same script locally first, then make the judgment calls CI cannot.
+The checklist itself lives in [CONTRIBUTING.md](../../CONTRIBUTING.md).
 
 ## 1. Mechanical rules — run the script
 
