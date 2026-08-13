@@ -4,12 +4,13 @@ This repository is a library of reusable **Agent Skills** written in the [SKILL.
 
 For the always-on summary agents use, see [AGENTS.md](AGENTS.md). This guide is the full reference.
 
-## Add a skill in four steps
+## Add a skill in five steps
 
-1. Create `skills/<skill-name>/SKILL.md` (see the [template](#skillmd-template) below).
+1. Create `skills/<skill-name>/SKILL.md` (see the [template](#skillmd-template) below), or run `/new-skill`.
 2. Write the frontmatter — `name` **must** equal `<skill-name>`.
 3. Write a trigger-rich `description` (see [Writing the description](#writing-the-description)).
-4. Run the [validation checklist](#validation-checklist) before you open a PR.
+4. Add the skill's row to the catalog table in [README.md](README.md).
+5. Run the [validation](#validation) below before you open a PR.
 
 ## Folder layout
 
@@ -24,6 +25,8 @@ skills/<skill-name>/
 ```
 
 Reference bundled files from `SKILL.md` with `./` relative paths, one level deep — e.g. `[the rules](./references/rules.md)`.
+
+Repo-level tooling lives in `tools/`, outside any skill.
 
 ### Naming
 
@@ -98,22 +101,42 @@ description: 'Turn notes and PDFs into Goodnotes-style study sets. Use when the 
 - Detail that would bloat this file lives in [references/](./references/).
 ```
 
-## Validation checklist
+## Validation
 
-Run through this before opening a PR. There is no automated check yet, so this is the gate.
+Validation is two-tier. Run through this before opening a PR.
 
-- [ ] The folder is `skills/<skill-name>/` and contains `SKILL.md`.
-- [ ] Frontmatter `name` exactly equals `<skill-name>`.
-- [ ] `name` is lowercase, hyphens only, 1–64 chars.
-- [ ] Frontmatter is valid YAML between `---` fences.
-- [ ] `description` is present, <=1024 chars, and names concrete trigger phrases.
-- [ ] `SKILL.md` is under ~500 lines; references over ~300 lines have a table of contents.
-- [ ] Every `./`-relative link resolves, and bundled files sit one level deep.
-- [ ] The skill is self-contained — it doesn't depend on another skill's files.
-- [ ] No secrets, credentials, or destructive commands are bundled.
+### Checked by the validator
+
+From the repository root — no argument checks every skill:
+
+```
+python3 tools/validate_skill.py skills/<skill-name>
+```
+
+CI runs the same command on every pull request that touches `skills/` or `tools/`, so run it locally
+first. It exits non-zero on any of these, and takes `--json` for a machine-readable report:
+
+- The folder is `skills/<skill-name>/` and contains `SKILL.md`.
+- Frontmatter `name` exactly equals `<skill-name>`, lowercase, hyphens only, 1–64 chars.
+- Frontmatter parses, and carries no keys outside the table above.
+- `description` is present and <=1024 chars, with no `<angle-bracket>` placeholders — they are stripped as markup.
+- `SKILL.md` is under 500 lines; references over 300 lines have a table of contents.
+- Every `./`-relative link resolves, and bundled files sit one level deep.
+- No link escapes the skill folder, and no secrets are bundled.
+
+### Checked by you
+
+The judgment calls a script can't make, and that CI will never catch. `/validate-skill <skill-name>` walks these with you.
+
+- [ ] The `description` names the phrasings a user would actually type — write down five and check each one.
+- [ ] The body follows the arc: When to use → domain facts → numbered Workflow → tips → Limits.
+- [ ] The Limits are honest about what the skill can't do.
+- [ ] The bundled example is real, and would pass the skill's own validator.
+- [ ] Nothing in the skill could steer an agent into a destructive command ([SECURITY.md](SECURITY.md)).
+- [ ] The skill has its row in the [README.md](README.md) catalog table.
 
 ## Pull requests
 
 - One skill (or one focused change) per PR.
 - In the description, note what the skill does and the trigger phrases you expect to invoke it.
-- Confirm the validation checklist passes.
+- Include the validator output, and confirm the judgment checks pass.
