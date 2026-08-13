@@ -51,7 +51,7 @@ def _read(path):
 
 
 def _scalar(value):
-    """Return (text, quoted, problem) for a single-line YAML scalar, keeping its syntax."""
+    # Returns (text, quoted, problem): the quoting has to survive, or a quoted boolean reads as a boolean.
     if value and value[0] in "\"'":
         quote = value[0]
         if len(value) < 2 or value[-1] != quote:
