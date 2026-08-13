@@ -1,21 +1,20 @@
 # goodnotes-skills
 
-A collection of [Agent Skills](https://agentskills.io) — self-contained folders of
-instructions and references that an AI agent loads on demand to perform specialized
-tasks well.
+A library of reusable **Agent Skills** — self-contained, Markdown-only skills in the [SKILL.md format](https://code.visualstudio.com/docs/copilot/customization/agent-skills) that AI coding agents load on demand.
 
-Each skill lives in its own directory with a `SKILL.md` (YAML frontmatter + Markdown
-instructions) and optional `references/` files that are read only when needed.
+## Repository layout
 
-## Skills
+Each skill lives in its own folder under `skills/`:
 
-| Skill | Description |
-| --- | --- |
-| [`commit-check`](./commit-check/) | Author, validate, and fix Git commit messages, branch names, author identity, sign-off trailers, and AI-attribution/force-push policy with the [commit-check](https://github.com/commit-check/commit-check) tool. Covers Conventional Commits/Branch, the `cchk.toml` policy, pre-commit hooks, and the GitHub Action. |
+```
+skills/<skill-name>/SKILL.md
+```
 
-## Using a skill
+## Contributing
 
-- **Claude Code / agents:** copy a skill directory (e.g. `commit-check/`) into your
-  `.claude/skills/` folder, or point your agent at this repository.
-- **Manually:** open the skill's `SKILL.md` and follow the instructions; the
-  `references/` files provide deeper detail on demand.
+- [AGENTS.md](AGENTS.md) — the always-on guide agents use in this repo.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — folder layout, naming, the `SKILL.md` template, and the validation checklist.
+
+## License
+
+[Apache 2.0](LICENSE).

@@ -1,0 +1,27 @@
+name: Commit Check
+
+on:
+  pull_request:
+    branches: 'main'
+    # `edited` lets the action re-validate the PR title when it changes.
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  commit-check:
+    runs-on: ubuntu-latest
+    permissions:  # use permissions because of pr-comments
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0  # Required for merge-base checks
+      - uses: commit-check/commit-check-action@562a184b2b8e583e757b17eb385bc48370f44547 # v2.13.1
+        with:
+          message: true
+          branch: true
+          author-name: false
+          author-email: false
+          job-summary: true
+          pr-comments: true
+          pr-title: true
